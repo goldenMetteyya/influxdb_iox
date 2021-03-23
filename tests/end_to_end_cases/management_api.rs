@@ -1,10 +1,15 @@
 use std::num::NonZeroU32;
 
+use field_mask::field_mask;
 use generated_types::{
     google::protobuf::{Duration, Empty},
     influxdata::iox::management::v1::*,
 };
-use influxdb_iox_client::{management::CreateDatabaseError, operations};
+use influxdb_iox_client::{
+    management::{CreateDatabaseError, UpdateDatabaseError},
+    operations,
+};
+
 use test_helpers::assert_contains;
 
 use super::scenario::{
@@ -156,7 +161,7 @@ async fn test_list_databases() {
 }
 
 #[tokio::test]
-async fn test_create_get_database() {
+async fn test_create_get_update_database() {
     let server_fixture = ServerFixture::create_shared().await;
     let mut client = server_fixture.management_client();
 
@@ -164,7 +169,7 @@ async fn test_create_get_database() {
 
     // Specify everything to allow direct comparison between request and response
     // Otherwise would expect difference due to server-side defaulting
-    let rules = DatabaseRules {
+    let mut rules = DatabaseRules {
         name: db_name.clone(),
         partition_template: Some(PartitionTemplate {
             parts: vec![partition_template::Part {
@@ -198,11 +203,51 @@ async fn test_create_get_database() {
         .expect("create database failed");
 
     let response = client
-        .get_database(db_name)
+        .get_database(&db_name)
         .await
         .expect("get database failed");
 
-    assert_eq!(response, rules);
+    assert_eq!(response.shard_config, None);
+
+    rules.shard_config = Some(ShardConfig {
+        ignore_errors: true,
+        ..Default::default()
+    });
+
+    let updated_rules = client
+        .update_database(rules.clone(), field_mask!["shard_config"])
+        .await
+        .expect("update database failed");
+
+    assert_eq!(updated_rules, rules);
+
+    let response = client
+        .get_database(&db_name)
+        .await
+        .expect("get database failed");
+
+    assert_eq!(
+        response
+            .shard_config
+            .expect("shard config missing")
+            .ignore_errors,
+        true
+    );
+
+    match client
+        .update_database(rules.clone(), field_mask!["lifecycle_config"])
+        .await
+        .unwrap_err()
+    {
+        UpdateDatabaseError::InvalidArgument(status) => {
+            assert_eq!(status.code(), tonic::Code::InvalidArgument);
+            assert_eq!(
+                status.message(),
+                r#"Violation for field "update_mask": Unknown field(s): lifecycle_config"#
+            );
+        }
+        e => panic!("{:?}", e),
+    }
 }
 
 #[tokio::test]

@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 
 use data_types::database_rules::DatabaseRules;
-use data_types::DatabaseName;
+use data_types::{field_validation::FromFieldOpt, DatabaseName};
 use generated_types::google::{AlreadyExists, FieldViolation, FieldViolationExt, NotFound};
 use generated_types::influxdata::iox::management::v1::*;
 use query::{Database, DatabaseStore};
@@ -94,6 +94,40 @@ where
             }
             Err(e) => Err(default_server_error_handler(e)),
         }
+    }
+
+    async fn update_database(
+        &self,
+        request: Request<UpdateDatabaseRequest>,
+    ) -> Result<Response<generated_types::influxdata::iox::management::v1::DatabaseRules>, Status>
+    {
+        let request = request.into_inner();
+
+        let rules = request
+            .rules
+            .ok_or_else(|| FieldViolation::required("rules"))?;
+        let db_name = DatabaseName::new(rules.name.clone()).field("name")?;
+
+        field_mask::process_all_matching_fields!((rules, request.update_mask) {
+            (shard_config, _) = .shard_config => {
+                let shard_config = shard_config.clone().optional("shard_config")?;
+                self.server.update_db_rules(&db_name, |orig| DatabaseRules {
+                    shard_config,
+                    ..orig
+                }).await.field("shard_config")?;
+            },
+        });
+
+        let updated_rules = self
+            .server
+            .db_rules(&db_name)
+            .ok_or_else(|| NotFound {
+                resource_type: "database".to_string(),
+                resource_name: db_name.to_string(),
+                ..Default::default()
+            })?
+            .into();
+        Ok(Response::new(updated_rules))
     }
 
     async fn list_chunks(

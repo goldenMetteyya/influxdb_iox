@@ -5,7 +5,7 @@ use thiserror::Error;
 use self::generated_types::{management_service_client::ManagementServiceClient, *};
 
 use crate::connection::Connection;
-use ::generated_types::google::longrunning::Operation;
+use ::generated_types::google::{longrunning::Operation, protobuf::FieldMask};
 use std::convert::TryInto;
 
 /// Re-export generated_types
@@ -43,6 +43,26 @@ pub enum CreateDatabaseError {
     /// Database already exists
     #[error("Database already exists")]
     DatabaseAlreadyExists,
+
+    /// Server returned an invalid argument error
+    #[error("Unexpected server error: {}: {}", .0.code(), .0.message())]
+    InvalidArgument(tonic::Status),
+
+    /// Client received an unexpected error from the server
+    #[error("Unexpected server error: {}: {}", .0.code(), .0.message())]
+    ServerError(tonic::Status),
+}
+
+/// Errors returned by Client::update_database
+#[derive(Debug, Error)]
+pub enum UpdateDatabaseError {
+    /// Writer ID is not set
+    #[error("Writer ID not set")]
+    NoWriterId,
+
+    /// Database not found
+    #[error("Database not found")]
+    DatabaseNotFound,
 
     /// Server returned an invalid argument error
     #[error("Unexpected server error: {}: {}", .0.code(), .0.message())]
@@ -269,6 +289,29 @@ impl Client {
             })?;
 
         Ok(())
+    }
+
+    /// Updates the configuration for a database.
+    pub async fn update_database(
+        &mut self,
+        rules: DatabaseRules,
+        update_mask: FieldMask,
+    ) -> Result<DatabaseRules, UpdateDatabaseError> {
+        let response = self
+            .inner
+            .update_database(UpdateDatabaseRequest {
+                rules: Some(rules),
+                update_mask: Some(update_mask),
+            })
+            .await
+            .map_err(|status| match status.code() {
+                tonic::Code::NotFound => UpdateDatabaseError::DatabaseNotFound,
+                tonic::Code::FailedPrecondition => UpdateDatabaseError::NoWriterId,
+                tonic::Code::InvalidArgument => UpdateDatabaseError::InvalidArgument(status),
+                _ => UpdateDatabaseError::ServerError(status),
+            })?;
+
+        Ok(response.into_inner())
     }
 
     /// List databases.

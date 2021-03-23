@@ -2,6 +2,7 @@
 //! instances of the mutable buffer, read buffer, and object store
 
 use std::any::Any;
+use std::ops::Deref;
 use std::sync::{
     atomic::{AtomicU64, AtomicUsize, Ordering},
     Arc,
@@ -9,7 +10,7 @@ use std::sync::{
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use snafu::{OptionExt, ResultExt, Snafu};
 use tracing::{debug, info};
 
@@ -156,7 +157,7 @@ const STARTING_SEQUENCE: u64 = 1;
 /// itself. The catalog state can be observed (but not mutated) by things
 /// outside of the Db
 pub struct Db {
-    pub rules: DatabaseRules,
+    pub rules: RwLock<DatabaseRules>,
 
     /// The metadata catalog
     catalog: Arc<Catalog>,
@@ -185,6 +186,7 @@ impl Db {
         wal_buffer: Option<Buffer>,
         jobs: Arc<JobRegistry>,
     ) -> Self {
+        let rules = RwLock::new(rules);
         let wal_buffer = wal_buffer.map(Mutex::new);
         let read_buffer = Arc::new(read_buffer);
         let catalog = Arc::new(Catalog::new());
@@ -451,13 +453,13 @@ impl Db {
 
     /// Returns true if this database can accept writes
     pub fn writeable(&self) -> bool {
-        !self.rules.lifecycle_rules.immutable
+        !self.rules.read().lifecycle_rules.immutable
     }
 }
 
 impl PartialEq for Db {
     fn eq(&self, other: &Self) -> bool {
-        self.rules == other.rules
+        self.rules.read().deref() == other.rules.read().deref()
     }
 }
 impl Eq for Db {}
@@ -523,7 +525,7 @@ impl Database for Db {
 
                 let size = mb_chunk.size();
 
-                if let Some(threshold) = self.rules.lifecycle_rules.mutable_size_threshold {
+                if let Some(threshold) = self.rules.read().lifecycle_rules.mutable_size_threshold {
                     if size > threshold.get() {
                         chunk.set_closing().expect("cannot close open chunk")
                     }
@@ -597,6 +599,7 @@ mod tests {
             },
             ..DatabaseRules::new()
         };
+        let rules = RwLock::new(rules);
         let db = Db { rules, ..db };
         assert!(!db.writeable());
 
@@ -816,8 +819,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_chunk_closing() {
-        let mut db = make_db();
-        db.rules.lifecycle_rules.mutable_size_threshold = Some(NonZeroUsize::new(2).unwrap());
+        let db = make_db();
+        db.rules.write().lifecycle_rules.mutable_size_threshold =
+            Some(NonZeroUsize::new(2).unwrap());
 
         let mut writer = TestLPWriter::default();
         writer.write_lp_string(&db, "cpu bar=1 10").unwrap();

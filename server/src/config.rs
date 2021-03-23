@@ -82,6 +82,27 @@ impl Config {
         state.databases.keys().cloned().collect()
     }
 
+    pub(crate) fn update_db_rules<F>(
+        &self,
+        db_name: &DatabaseName<'static>,
+        update: F,
+    ) -> Result<Arc<Db>>
+    where
+        F: FnOnce(DatabaseRules) -> DatabaseRules,
+    {
+        let state = self.state.read().expect("mutex poisoned");
+        let db_state = state
+            .databases
+            .get(db_name)
+            .ok_or_else(|| Error::DatabaseNotFound {
+                db_name: db_name.to_string(),
+            })?;
+
+        let mut rules = db_state.db.rules.write();
+        *rules = update(rules.clone());
+        Ok(Arc::clone(&db_state.db))
+    }
+
     pub(crate) fn remotes_sorted(&self) -> Vec<(WriterId, String)> {
         let state = self.state.read().expect("mutex poisoned");
         state.remotes.iter().map(|(&a, b)| (a, b.clone())).collect()

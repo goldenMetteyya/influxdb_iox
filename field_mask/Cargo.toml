@@ -1,0 +1,12 @@
+[package]
+name = "field_mask"
+version = "0.1.0"
+authors = ["Marko Mikulicic <mkm@influxdata.com>"]
+edition = "2018"
+description = "Helpers for working with gRPC FieldMask values."
+
+[dependencies]
+generated_types = { path = "../generated_types" }
+
+[dev-dependencies]
+thiserror = "1.0.23"

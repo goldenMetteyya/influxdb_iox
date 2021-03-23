@@ -1,7 +1,9 @@
 syntax = "proto3";
 package influxdata.iox.management.v1;
 
+
 import "google/longrunning/operations.proto";
+import "google/protobuf/field_mask.proto";
 import "influxdata/iox/management/v1/database_rules.proto";
 import "influxdata/iox/management/v1/chunk.proto";
 import "influxdata/iox/management/v1/partition.proto";
@@ -16,6 +18,12 @@ service ManagementService {
   rpc GetDatabase(GetDatabaseRequest) returns (GetDatabaseResponse);
 
   rpc CreateDatabase(CreateDatabaseRequest) returns (CreateDatabaseResponse);
+
+  // Update a database.
+  //
+  // https://google.aip.dev/134 and buf lint don't agree
+  // buf:lint:ignore RPC_RESPONSE_STANDARD_NAME
+  rpc UpdateDatabase(UpdateDatabaseRequest) returns (DatabaseRules);
 
   // List chunks available on this database
   rpc ListChunks(ListChunksRequest) returns (ListChunksResponse);
@@ -52,7 +60,6 @@ service ManagementService {
 
   // Close a chunk and move it to the read buffer
   rpc ClosePartitionChunk(ClosePartitionChunkRequest) returns (ClosePartitionChunkResponse);
-
 }
 
 message GetWriterIdRequest {}
@@ -86,6 +93,22 @@ message CreateDatabaseRequest {
 }
 
 message CreateDatabaseResponse {}
+
+// Update a database.
+//
+// Follows the Update pattern in https://google.aip.dev/134
+message UpdateDatabaseRequest {
+  // Partially apply the `rules` config structure according to the `update_mask` field contents.
+  //
+  // The rule's `name` field is used to identify the database rules to be updated.
+  DatabaseRules rules = 1;
+
+  // Required. Indicates which fields in the provided topic to update. Must be
+  // specified and non-empty.
+  //
+  // See https://google.aip.dev/161
+  google.protobuf.FieldMask update_mask = 3;
+}
 
 message ListChunksRequest {
   // the name of the database

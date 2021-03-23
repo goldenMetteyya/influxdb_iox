@@ -957,6 +957,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "field_mask"
+version = "0.1.0"
+dependencies = [
+ "generated_types",
+ "thiserror",
+]
+
+[[package]]
 name = "fixedbitset"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1433,6 +1441,7 @@ dependencies = [
  "dirs 3.0.1",
  "dotenv",
  "env_logger",
+ "field_mask",
  "flate2",
  "futures",
  "generated_types",
@@ -1445,6 +1454,7 @@ dependencies = [
  "influxdb_tsm",
  "ingest",
  "internal_types",
+ "itertools 0.9.0",
  "logfmt",
  "mem_qe",
  "mutable_buffer",
