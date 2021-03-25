@@ -123,13 +123,9 @@ mod tests {
 
     #[tokio::test]
     async fn is_onboarding_allowed() -> Result {
-        let token = "some-token";
+        let mock_server = mock("GET", "/api/v2/setup").create();
 
-        let mock_server = mock("GET", "/api/v2/setup")
-            .match_header("Authorization", format!("Token {}", token).as_str())
-            .create();
-
-        let client = Client::new(&mockito::server_url(), token);
+        let client = Client::new(&mockito::server_url(), "");
 
         let _result = client.is_onboarding_allowed().await;
 
@@ -147,7 +143,6 @@ mod tests {
         let retention_period_hrs = 1;
 
         let mock_server = mock("POST", "/api/v2/setup")
-            .match_header("Authorization", format!("Token {}", token).as_str())
             .match_body(
                 format!(
                     r#"{{"username":"{}","org":"{}","bucket":"{}","password":"{}","retentionPeriodHrs":{}}}"#,
@@ -211,13 +206,11 @@ mod tests {
 
     #[tokio::test]
     async fn onboarding_opt() -> Result {
-        let token = "some-token";
         let username = "some-user";
         let org = "some-org";
         let bucket = "some-bucket";
 
         let mock_server = mock("POST", "/api/v2/setup")
-            .match_header("Authorization", format!("Token {}", token).as_str())
             .match_body(
                 format!(
                     r#"{{"username":"{}","org":"{}","bucket":"{}"}}"#,
@@ -227,7 +220,7 @@ mod tests {
             )
             .create();
 
-        let client = Client::new(&mockito::server_url(), token);
+        let client = Client::new(&mockito::server_url(), "");
 
         let _result = client
             .onboarding(username, org, bucket, None, None, None)
