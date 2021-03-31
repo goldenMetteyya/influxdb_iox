@@ -48,33 +48,41 @@ table PartitionWrite {
 // A collection of rows to write to a single table.
 table TableWriteBatch {
   name: string;
-  column_names: [string];
-  // every row should have the same number of elements as column_names
-  rows: [Row];
+  columns: [Column];
 }
 
-// A single row
-table Row {
-  // the value's position in the array matches the column name position
-  values: [Value];
+// A single column
+table Column {
+  // The name of the column
+  name: string;
+
+  // The semantic meaning of the column.
+  column_type: ColumnType; // is "type" allowed as a field name or not?
+  
+  // The values within the column
+  //
+  // Thoughts! If you know that all of the values in a column are not NULL, which
+  // I assume is the case for columns originating from line protocol (unless 
+  // some pivoting has already happened?), then you can probably improve memory
+  // and performance here by having variants for `ColumnValue` that are simply
+  // vectors of scalars... So here instead of `[ColumnValue]` you would have a
+  // union and some of the variants of the union would be `ColumnValue` (for e.g.,
+  // columns with NULL in) and some of the variants would just be e.g., `[int64]`
+  // for columns with no null values in.
+  values: [ColumnValue];
 }
 
+// The semantic meaning of a column of data.
+enum ColumnType : byte { Tag = 1, Field, Timestamp, Other}
+
+// Possible logical types for a column. 
 union ColumnValue {
-  TagValue,
   I64Value,
   U64Value,
   F64Value,
   BoolValue,
+  BytesValues, // do you want this right now?
   StringValue
-}
-
-// A value for a specific column
-table Value {
-  value: ColumnValue;
-}
-
-table TagValue {
-  value: string;
 }
 
 table I64Value {
